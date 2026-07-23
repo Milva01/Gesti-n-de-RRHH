@@ -44,15 +44,24 @@ import { IndicadoresModule } from './components/IndicadoresModule';
 import { DesarrolloTalentoModule } from './components/DesarrolloTalentoModule';
 import { NominaModule } from './components/NominaModule';
 import { LoginScreen } from './components/LoginScreen';
+import { SetPasswordScreen } from './components/SetPasswordScreen';
 
 import { BirthdayModal } from './components/BirthdayModal';
 import { getTodayBirthdays, getUpcomingBirthdays } from './utils/birthdays';
 import { Cake, Sparkles, X, ChevronRight } from 'lucide-react';
 
+const initialAuthAction =
+  typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type')
+    : null;
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
+  const [passwordSetupRequired, setPasswordSetupRequired] = useState(
+    initialAuthAction === 'invite' || initialAuthAction === 'recovery',
+  );
 
   useEffect(() => {
     if (!supabase) {
@@ -87,7 +96,8 @@ export default function App() {
     };
 
     supabase.auth.getSession().then(({ data }) => applySession(data.session?.user ?? null));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordSetupRequired(true);
       void applySession(session?.user ?? null);
     });
 
@@ -266,6 +276,18 @@ export default function App() {
       <div className="min-h-screen bg-[#111113] text-white flex items-center justify-center">
         <div className="text-sm text-zinc-400">Validando acceso seguro…</div>
       </div>
+    );
+  }
+
+  if (currentUser && passwordSetupRequired) {
+    return (
+      <SetPasswordScreen
+        email={currentUser.email}
+        onComplete={() => {
+          setPasswordSetupRequired(false);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }}
+      />
     );
   }
 
