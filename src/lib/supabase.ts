@@ -44,19 +44,22 @@ export async function signIn(email: string, password: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function signUpAuthorized(
+export async function activatePrecreatedUser(
   email: string,
-  password: string,
+  newPassword: string,
   activationCode: string,
 ): Promise<void> {
-  const { error } = await requireClient().auth.signUp({
+  const client = requireClient();
+  const { error: signInError } = await client.auth.signInWithPassword({
     email,
-    password,
-    options: {
-      data: { activation_code: activationCode.trim().toUpperCase() },
-    },
+    password: activationCode.trim().toUpperCase(),
   });
-  if (error) throw error;
+  if (signInError) {
+    throw new Error('El correo o la clave de activación no son correctos.');
+  }
+
+  const { error: updateError } = await client.auth.updateUser({ password: newPassword });
+  if (updateError) throw updateError;
 }
 
 export async function signOut(): Promise<void> {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AlertCircle, ArrowRight, Building2, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react';
-import { isSupabaseConfigured, signIn, signUpAuthorized } from '../lib/supabase';
+import { activatePrecreatedUser, isSupabaseConfigured, signIn } from '../lib/supabase';
 
 export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -24,7 +24,7 @@ export const LoginScreen: React.FC = () => {
         if (password !== confirmation) {
           throw new Error('Las contraseñas no coinciden.');
         }
-        await signUpAuthorized(email.trim().toLowerCase(), password, activationCode);
+        await activatePrecreatedUser(email.trim().toLowerCase(), password, activationCode);
       } else {
         await signIn(email.trim().toLowerCase(), password);
       }
