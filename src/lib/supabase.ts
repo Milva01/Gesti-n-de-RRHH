@@ -44,6 +44,21 @@ export async function signIn(email: string, password: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function signUpAuthorized(
+  email: string,
+  password: string,
+  activationCode: string,
+): Promise<void> {
+  const { error } = await requireClient().auth.signUp({
+    email,
+    password,
+    options: {
+      data: { activation_code: activationCode.trim().toUpperCase() },
+    },
+  });
+  if (error) throw error;
+}
+
 export async function signOut(): Promise<void> {
   const { error } = await requireClient().auth.signOut();
   if (error) throw error;

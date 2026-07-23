@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { AlertCircle, ArrowRight, Building2, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react';
-import { isSupabaseConfigured, signIn } from '../lib/supabase';
+import { isSupabaseConfigured, signIn, signUpAuthorized } from '../lib/supabase';
 
 export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [activationCode, setActivationCode] = useState('');
+  const [isFirstAccess, setIsFirstAccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -14,7 +17,17 @@ export const LoginScreen: React.FC = () => {
     setLoading(true);
 
     try {
-      await signIn(email.trim().toLowerCase(), password);
+      if (isFirstAccess) {
+        if (password.length < 12) {
+          throw new Error('La contraseña debe tener al menos 12 caracteres.');
+        }
+        if (password !== confirmation) {
+          throw new Error('Las contraseñas no coinciden.');
+        }
+        await signUpAuthorized(email.trim().toLowerCase(), password, activationCode);
+      } else {
+        await signIn(email.trim().toLowerCase(), password);
+      }
     } catch (cause) {
       const message =
         cause instanceof Error && /invalid login credentials/i.test(cause.message)
@@ -47,7 +60,9 @@ export const LoginScreen: React.FC = () => {
             <div>
               <h2 className="font-bold">Ingreso seguro</h2>
               <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-                Usá la cuenta asignada por Recursos Humanos. La sesión se protege y sincroniza mediante Supabase.
+                {isFirstAccess
+                  ? 'Usá el correo y la clave de activación que te entregó Recursos Humanos.'
+                  : 'Usá la cuenta asignada por Recursos Humanos. La sesión se protege y sincroniza mediante Supabase.'}
               </p>
             </div>
           </div>
@@ -83,13 +98,27 @@ export const LoginScreen: React.FC = () => {
               </span>
             </label>
 
+            {isFirstAccess && (
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold text-zinc-300">Clave de activación</span>
+                <input
+                  type="text"
+                  autoComplete="one-time-code"
+                  required
+                  value={activationCode}
+                  onChange={(event) => setActivationCode(event.target.value.toUpperCase())}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 font-mono text-sm uppercase tracking-wider outline-none transition focus:border-[#E30613] focus:ring-2 focus:ring-red-900"
+                />
+              </label>
+            )}
+
             <label className="block">
               <span className="mb-1.5 block text-xs font-bold text-zinc-300">Contraseña</span>
               <span className="relative block">
                 <Lock className="absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-zinc-500" aria-hidden="true" />
                 <input
                   type="password"
-                  autoComplete="current-password"
+                  autoComplete={isFirstAccess ? 'new-password' : 'current-password'}
                   required
                   minLength={8}
                   value={password}
@@ -99,13 +128,42 @@ export const LoginScreen: React.FC = () => {
               </span>
             </label>
 
+            {isFirstAccess && (
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold text-zinc-300">Repetir contraseña</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={12}
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm outline-none transition focus:border-[#E30613] focus:ring-2 focus:ring-red-900"
+                />
+              </label>
+            )}
+
             <button
               type="submit"
               disabled={loading || !isSupabaseConfigured}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#E30613] px-4 py-2.5 text-sm font-bold transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <ArrowRight className="w-4 h-4" aria-hidden="true" />}
-              {loading ? 'Ingresando…' : 'Ingresar'}
+              {loading ? 'Procesando…' : isFirstAccess ? 'Crear acceso seguro' : 'Ingresar'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsFirstAccess((value) => !value);
+                setError('');
+                setPassword('');
+                setConfirmation('');
+                setActivationCode('');
+              }}
+              className="w-full text-center text-xs font-semibold text-zinc-400 transition hover:text-white"
+            >
+              {isFirstAccess ? 'Ya tengo una cuenta' : 'Primera vez: activar mi cuenta'}
             </button>
           </form>
         </section>
