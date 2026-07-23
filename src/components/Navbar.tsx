@@ -37,7 +37,7 @@ interface NavbarProps {
   allUsers?: UserProfile[];
   onSelectUser?: (user: UserProfile) => void;
   onLogout?: () => void;
-  onResetData: () => void;
+  onResetData?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -260,14 +260,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Reset button */}
-          <button
-            onClick={onResetData}
-            title="Restablecer datos por defecto"
-            className="p-1.5 text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 rounded-lg border border-zinc-700 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          {onResetData && (
+            <button
+              onClick={onResetData}
+              title="Restablecer datos por defecto"
+              className="p-1.5 text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 rounded-lg border border-zinc-700 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          )}
 
         </div>
       </div>

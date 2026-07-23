@@ -5,42 +5,26 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  getStoredEmployees,
-  saveEmployees,
-  getStoredNovedades,
-  saveNovedades,
-  getStoredCapacitaciones,
-  saveCapacitaciones,
-  getStoredPerfiles,
-  savePerfiles,
-  getStoredEvaluaciones,
-  saveEvaluaciones,
-  getStoredSkills,
-  saveSkills,
-  getStoredRegistrosPolivalencia,
-  saveRegistrosPolivalencia,
-  resetAllDataToDefault,
-} from './utils/storage';
-import {
+  supabase,
   subscribeEmployees,
-  saveEmployeeToFirestore,
-  deleteEmployeeFromFirestore,
-  bulkSaveEmployeesToFirestore,
+  saveEmployeeToSupabase,
+  deleteEmployeeFromSupabase,
+  bulkSaveEmployeesToSupabase,
   subscribeNovedades,
-  saveNovedadToFirestore,
-  deleteNovedadFromFirestore,
-  bulkReplaceNovedadesInFirestore,
+  saveNovedadToSupabase,
+  deleteNovedadFromSupabase,
+  bulkReplaceNovedadesInSupabase,
   subscribeCapacitaciones,
-  saveCapacitacionToFirestore,
+  saveCapacitacionToSupabase,
   subscribePerfiles,
-  savePerfilToFirestore,
   subscribeEvaluaciones,
-  saveEvaluacionToFirestore,
+  saveEvaluacionToSupabase,
   subscribeSkills,
-  saveSkillToFirestore,
   subscribeRegistrosPolivalencia,
-  saveRegistroPolivalenciaToFirestore,
-} from './lib/firebase';
+  saveRegistroPolivalenciaToSupabase,
+  getUserProfile,
+  signOut,
+} from './lib/supabase';
 import {
   Empleado,
   Novedad,
@@ -61,90 +45,75 @@ import { DesarrolloTalentoModule } from './components/DesarrolloTalentoModule';
 import { NominaModule } from './components/NominaModule';
 import { LoginScreen } from './components/LoginScreen';
 
-import { getStoredUser, setStoredUser, getStoredUserProfiles } from './data/users';
 import { BirthdayModal } from './components/BirthdayModal';
 import { getTodayBirthdays, getUpcomingBirthdays } from './utils/birthdays';
 import { Cake, Sparkles, X, ChevronRight } from 'lucide-react';
 
 export default function App() {
-  // Auth User State
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getStoredUser());
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState('');
 
-  // Check URL query search param OR hash fragment for automatic login from direct links (e.g., #user=laura@crucianelli.com)
   useEffect(() => {
-    try {
-      let emailParam: string | null = null;
-
-      // 1. Check Search Query Parameters (?user=...)
-      if (window.location.search) {
-        const params = new URLSearchParams(window.location.search);
-        emailParam = params.get('user') || params.get('email') || params.get('login');
-      }
-
-      // 2. Check Hash Fragment (#user=... or #laura@crucianelli.com)
-      if (!emailParam && window.location.hash) {
-        const rawHash = window.location.hash.substring(1); // remove '#'
-        if (rawHash.includes('=')) {
-          const hashParams = new URLSearchParams(rawHash);
-          emailParam = hashParams.get('user') || hashParams.get('email') || hashParams.get('login');
-        } else if (rawHash.includes('@')) {
-          emailParam = rawHash;
-        }
-      }
-
-      if (emailParam) {
-        const cleanEmail = decodeURIComponent(emailParam).trim().toLowerCase();
-        const profiles = getStoredUserProfiles();
-        const found = profiles.find((p) => p.email.toLowerCase() === cleanEmail);
-        if (found) {
-          setCurrentUser(found);
-          setStoredUser(found);
-        } else if (cleanEmail.includes('@')) {
-          const namePart = cleanEmail.split('@')[0];
-          const formattedName = namePart
-            .split('.')
-            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-            .join(' ');
-          const newUser: UserProfile = {
-            id: `user_url_${Date.now()}`,
-            email: cleanEmail,
-            nombre: formattedName || 'Usuario Crucianelli',
-            cargo: 'Gestor Autorizado',
-            rol: 'Gestión RRHH',
-            empresa: 'Talleres Metalúrgicos Crucianelli',
-            iniciales: (formattedName || 'UC')
-              .split(' ')
-              .map((n) => n[0])
-              .join('')
-              .toUpperCase()
-              .slice(0, 2),
-          };
-          setCurrentUser(newUser);
-          setStoredUser(newUser);
-        }
-      }
-    } catch (err) {
-      console.error('Error parsing URL login parameter:', err);
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
     }
+
+    let active = true;
+    const applySession = async (user: Parameters<typeof getUserProfile>[0] | null) => {
+      if (!active) return;
+      if (!user) {
+        setCurrentUser(null);
+        setAuthError('');
+        setAuthLoading(false);
+        return;
+      }
+
+      try {
+        const profile = await getUserProfile(user);
+        if (active) {
+          setCurrentUser(profile);
+          setAuthError('');
+        }
+      } catch (error) {
+        if (active) {
+          setCurrentUser(null);
+          setAuthError(error instanceof Error ? error.message : 'No se pudo validar tu perfil.');
+        }
+      } finally {
+        if (active) setAuthLoading(false);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data }) => applySession(data.session?.user ?? null));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      void applySession(session?.user ?? null);
+    });
+
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   // Main Data States
-  const [employees, setEmployees] = useState<Empleado[]>(() => getStoredEmployees());
-
-  const [novedades, setNovedades] = useState<Novedad[]>(() => getStoredNovedades());
-  const [capacitaciones, setCapacitaciones] = useState<Capacitacion[]>(() => getStoredCapacitaciones());
-  const [perfiles, setPerfiles] = useState<PerfilPuesto[]>(() => getStoredPerfiles());
-  const [evaluaciones, setEvaluaciones] = useState<EvaluacionDesempeno[]>(() => getStoredEvaluaciones());
-  const [skills, setSkills] = useState<SkillPolivalencia[]>(() => getStoredSkills());
-  const [registrosPolivalencia, setRegistrosPolivalencia] = useState<MatrizPolivalenciaRegistro[]>(() => getStoredRegistrosPolivalencia());
+  const [employees, setEmployees] = useState<Empleado[]>([]);
+  const [novedades, setNovedades] = useState<Novedad[]>([]);
+  const [capacitaciones, setCapacitaciones] = useState<Capacitacion[]>([]);
+  const [perfiles, setPerfiles] = useState<PerfilPuesto[]>([]);
+  const [evaluaciones, setEvaluaciones] = useState<EvaluacionDesempeno[]>([]);
+  const [skills, setSkills] = useState<SkillPolivalencia[]>([]);
+  const [registrosPolivalencia, setRegistrosPolivalencia] = useState<MatrizPolivalenciaRegistro[]>([]);
 
   // Global Navigation & Filtering States
   const [activeTab, setActiveTab] = useState<'novedades' | 'indicadores' | 'desarrollo' | 'nomina'>('novedades');
   const [empresaFilter, setEmpresaFilter] = useState<'Todas' | Empresa>('Todas');
   const [searchTermGlobal, setSearchTermGlobal] = useState<string>('');
 
-  // Firestore Realtime Subscriptions
   useEffect(() => {
+    if (!currentUser) return;
+
     const unsubEmployees = subscribeEmployees((data) => {
       if (data && data.length > 0) setEmployees(data);
     });
@@ -176,41 +145,12 @@ export default function App() {
       unsubSkills();
       unsubRegistros();
     };
-  }, []);
-
-  // Persist State Changes Local Backup
-  useEffect(() => {
-    saveEmployees(employees);
-  }, [employees]);
-
-  useEffect(() => {
-    saveNovedades(novedades);
-  }, [novedades]);
-
-  useEffect(() => {
-    saveCapacitaciones(capacitaciones);
-  }, [capacitaciones]);
-
-  useEffect(() => {
-    savePerfiles(perfiles);
-  }, [perfiles]);
-
-  useEffect(() => {
-    saveEvaluaciones(evaluaciones);
-  }, [evaluaciones]);
-
-  useEffect(() => {
-    saveSkills(skills);
-  }, [skills]);
-
-  useEffect(() => {
-    saveRegistrosPolivalencia(registrosPolivalencia);
-  }, [registrosPolivalencia]);
+  }, [currentUser?.id]);
 
   // Handlers for Novedades
   const handleAddNovedad = (newNov: Novedad) => {
     setNovedades((prev) => [newNov, ...prev]);
-    saveNovedadToFirestore(newNov).catch((err) => console.error('Error saving novedad to Firestore:', err));
+    saveNovedadToSupabase(newNov).catch((err) => console.error('Error al guardar la novedad:', err));
   };
 
   const handleUpdateEstadoNovedad = (id: string, nuevoEstado: EstadoAprobacion) => {
@@ -220,42 +160,44 @@ export default function App() {
       setNovedades((prev) =>
         prev.map((n) => (n.id === id ? novWithNewStatus : n))
       );
-      saveNovedadToFirestore(novWithNewStatus).catch((err) => console.error('Error updating status in Firestore:', err));
+      saveNovedadToSupabase(novWithNewStatus).catch((err) => console.error('Error al actualizar la novedad:', err));
     }
   };
 
   const handleDeleteNovedad = (id: string) => {
     setNovedades((prev) => prev.filter((n) => n.id !== id));
-    deleteNovedadFromFirestore(id).catch((err) => console.error('Error deleting novedad from Firestore:', err));
+    deleteNovedadFromSupabase(id).catch((err) => console.error('Error al eliminar la novedad:', err));
   };
 
   const handleBulkImportNovedades = (items: Novedad[]) => {
-    const combined = [...items, ...novedades];
+    const combined = Array.from(
+      new Map([...items, ...novedades].map((item) => [item.id, item])).values(),
+    );
     setNovedades(combined);
-    bulkReplaceNovedadesInFirestore(combined).catch((err) => console.error('Error bulk importing novedades:', err));
+    bulkReplaceNovedadesInSupabase(combined).catch((err) => console.error('Error al importar novedades:', err));
   };
 
   // Handlers for Capacitaciones & Talent
   const handleAddCapacitacion = (newCap: Capacitacion) => {
     setCapacitaciones((prev) => [newCap, ...prev]);
-    saveCapacitacionToFirestore(newCap).catch((err) => console.error('Error saving capacitacion:', err));
+    saveCapacitacionToSupabase(newCap).catch((err) => console.error('Error al guardar la capacitación:', err));
   };
 
   const handleUpdateCapacitacion = (updatedCap: Capacitacion) => {
     setCapacitaciones((prev) => prev.map((c) => (c.id === updatedCap.id ? updatedCap : c)));
-    saveCapacitacionToFirestore(updatedCap).catch((err) => console.error('Error updating capacitacion:', err));
+    saveCapacitacionToSupabase(updatedCap).catch((err) => console.error('Error al actualizar la capacitación:', err));
   };
 
   const handleAddEvaluacion = (newEval: EvaluacionDesempeno) => {
     setEvaluaciones((prev) => [newEval, ...prev]);
-    saveEvaluacionToFirestore(newEval).catch((err) => console.error('Error saving evaluacion:', err));
+    saveEvaluacionToSupabase(newEval).catch((err) => console.error('Error al guardar la evaluación:', err));
   };
 
   const handleUpdatePolivalencia = (legajo: string, skillId: string, nivel: NivelPolivalencia) => {
     setRegistrosPolivalencia((prev) => {
       const idx = prev.findIndex((r) => r.legajo === legajo && r.skillId === skillId);
       const reg = { legajo, skillId, nivel };
-      saveRegistroPolivalenciaToFirestore(reg as any).catch((err) => console.error('Error saving polivalencia:', err));
+      saveRegistroPolivalenciaToSupabase(reg).catch((err) => console.error('Error al guardar polivalencia:', err));
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = reg;
@@ -269,17 +211,17 @@ export default function App() {
   // Handlers for Nomina
   const handleAddEmployee = (emp: Empleado) => {
     setEmployees((prev) => [emp, ...prev]);
-    saveEmployeeToFirestore(emp).catch((err) => console.error('Error saving employee:', err));
+    saveEmployeeToSupabase(emp).catch((err) => console.error('Error al guardar el empleado:', err));
   };
 
   const handleUpdateEmployee = (emp: Empleado) => {
     setEmployees((prev) => prev.map((e) => (e.legajo === emp.legajo ? emp : e)));
-    saveEmployeeToFirestore(emp).catch((err) => console.error('Error updating employee:', err));
+    saveEmployeeToSupabase(emp).catch((err) => console.error('Error al actualizar el empleado:', err));
   };
 
   const handleDeleteEmployee = (legajo: string) => {
     setEmployees((prev) => prev.filter((e) => e.legajo !== legajo));
-    deleteEmployeeFromFirestore(legajo).catch((err) => console.error('Error deleting employee:', err));
+    deleteEmployeeFromSupabase(legajo).catch((err) => console.error('Error al eliminar el empleado:', err));
   };
 
   const handleBulkImportEmployees = (importedList: Empleado[], mode: 'replace' | 'append') => {
@@ -294,15 +236,7 @@ export default function App() {
         return Array.from(existingMap.values());
       });
     }
-    bulkSaveEmployeesToFirestore(importedList, mode).catch((err) => console.error('Error bulk saving employees:', err));
-  };
-
-  // Reset to default seed
-  const handleResetData = () => {
-    if (confirm('¿Desea restablecer todos los datos a la nómina inicial original?')) {
-      resetAllDataToDefault();
-      window.location.reload();
-    }
+    bulkSaveEmployeesToSupabase(importedList, mode).catch((err) => console.error('Error al importar empleados:', err));
   };
 
   // Birthday Modal & Banner States
@@ -327,17 +261,24 @@ export default function App() {
     return employees.filter((e) => e.estado === 'ACTIVO').length;
   }, [employees]);
 
-  const userProfiles = useMemo(() => getStoredUserProfiles(), [currentUser]);
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#111113] text-white flex items-center justify-center">
+        <div className="text-sm text-zinc-400">Validando acceso seguro…</div>
+      </div>
+    );
+  }
 
-  // Login Gate: Must log in before managing the app
   if (!currentUser) {
     return (
-      <LoginScreen
-        onLogin={(user) => {
-          setStoredUser(user);
-          setCurrentUser(user);
-        }}
-      />
+      <>
+        {authError && (
+          <div className="fixed top-4 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-rose-800 bg-rose-950 px-4 py-2 text-sm text-rose-100 shadow-xl">
+            {authError}
+          </div>
+        )}
+        <LoginScreen />
+      </>
     );
   }
 
@@ -356,16 +297,10 @@ export default function App() {
         todayBirthdaysCount={todayBirthdays.length}
         onOpenBirthdayModal={() => setIsBirthdayModalOpen(true)}
         currentUser={currentUser}
-        allUsers={userProfiles}
-        onSelectUser={(user) => {
-          setStoredUser(user);
-          setCurrentUser(user);
-        }}
+        allUsers={[]}
         onLogout={() => {
-          setStoredUser(null);
-          setCurrentUser(null);
+          void signOut().catch((error) => console.error('Error al cerrar sesión:', error));
         }}
-        onResetData={handleResetData}
       />
 
 
