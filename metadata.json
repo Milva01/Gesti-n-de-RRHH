@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: Remix: Gestión de Recursos Humanos",
+  "description": "Plataforma integral de Gestión de RRHH: Novedades del Personal, Indicadores de Gestión, Capacitaciones, Perfiles de Puesto con Evaluaciones de Desempeño y Matriz de Polivalencia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

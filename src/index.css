@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .bg-crucianelli-red {
+    background-color: #E30613;
+  }
+  .bg-crucianelli-red-dark {
+    background-color: #C80510;
+  }
+  .text-crucianelli-red {
+    color: #E30613;
+  }
+  .border-crucianelli-red {
+    border-color: #E30613;
+  }
+  .bg-crucianelli-slate {
+    background-color: #18181B;
+  }
+  .bg-crucianelli-graphite {
+    background-color: #27272A;
+  }
+  .text-crucianelli-slate {
+    color: #18181B;
+  }
+}
+
+:root {
+  --color-crucianelli-red: #E30613;
+  --color-crucianelli-red-dark: #C80510;
+  --color-crucianelli-slate: #18181B;
+}
